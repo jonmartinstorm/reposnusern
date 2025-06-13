@@ -77,10 +77,10 @@ var _ = Describe("GraphQL-relaterte hjelpefunksjoner", func() {
 
 			Expect(entry).NotTo(BeNil())
 			Expect(entry.Repo.Name).To(Equal("arbeidsgiver"))
-			Expect(entry.Readme).To(Equal("Hello world"))
+			Expect(entry.Repo.Readme).To(Equal("Hello world"))
 			Expect(entry.Languages["Go"]).To(Equal(100))
-			Expect(entry.Security["has_security_md"]).To(BeTrue())
-			Expect(entry.Security["has_dependabot"]).To(BeFalse())
+			Expect(entry.Repo.Security["has_security_md"]).To(BeTrue())
+			Expect(entry.Repo.Security["has_dependabot"]).To(BeFalse())
 		})
 	})
 

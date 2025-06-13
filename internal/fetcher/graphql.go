@@ -65,13 +65,16 @@ func ParseRepoData(data map[string]interface{}, baseRepo models.RepoMeta) *model
 		slog.Warn("Mangler 'repository'-data i GraphQL-response")
 		return nil
 	}
+
+	updatedRepo := baseRepo
+	updatedRepo.Readme = ExtractReadme(repoData)
+	updatedRepo.Security = ExtractSecurity(repoData)
+
 	return &models.RepoEntry{
-		Repo:      baseRepo,
+		Repo:      updatedRepo,
 		Languages: ExtractLanguages(repoData),
 		Files:     ExtractFiles(repoData),
 		CIConfig:  ExtractCI(repoData),
-		Readme:    ExtractReadme(repoData),
-		Security:  ExtractSecurity(repoData),
 	}
 }
 

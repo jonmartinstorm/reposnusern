@@ -71,8 +71,6 @@ func ImportRepo(ctx context.Context, db *sql.DB, entry models.RepoEntry, index i
 	insertLanguages(ctx, queries, id, name, entry.Languages)
 	insertDockerfiles(ctx, queries, id, name, entry.Files)
 	insertCIConfig(ctx, queries, id, name, entry.CIConfig)
-	insertReadme(ctx, queries, id, name, entry.Readme)
-	insertSecurityFeatures(ctx, queries, id, name, entry.Security)
 	insertSBOMPackagesGithub(ctx, queries, id, name, entry.SBOM)
 
 	if err := tx.Commit(); err != nil {
@@ -163,42 +161,6 @@ func insertCIConfig(
 		}); err != nil {
 			slog.Warn("CI-feil", "repo", name, "fil", f.Path, "error", err)
 		}
-	}
-}
-
-func insertReadme(
-	ctx context.Context,
-	queries *storage.Queries,
-	repoID int64,
-	name string,
-	content string,
-) {
-	if content == "" {
-		return
-	}
-
-	if err := queries.InsertReadme(ctx, storage.InsertReadmeParams{
-		RepoID:  repoID,
-		Content: content,
-	}); err != nil {
-		slog.Warn("README-feil", "repo", name, "error", err)
-	}
-}
-
-func insertSecurityFeatures(
-	ctx context.Context,
-	queries *storage.Queries,
-	repoID int64,
-	name string,
-	security map[string]bool,
-) {
-	if err := queries.InsertSecurityFeatures(ctx, storage.InsertSecurityFeaturesParams{
-		RepoID:        repoID,
-		HasSecurityMd: security["has_security_md"],
-		HasDependabot: security["has_dependabot"],
-		HasCodeql:     security["has_codeql"],
-	}); err != nil {
-		slog.Warn("Security-feil", "repo", name, "error", err)
 	}
 }
 
