@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jonmartinstorm/reposnusern/internal/dbwriter"
 	"github.com/jonmartinstorm/reposnusern/internal/models"
@@ -44,7 +45,8 @@ var _ = Describe("dbwriter.ImportRepo", Ordered, func() {
 			Languages: map[string]int{"Go": 12345},
 		}
 
-		err := dbwriter.ImportRepo(ctx, testDB.DB, entry, 1)
+		snapshotDate := time.Date(2025, 6, 13, 12, 0, 0, 0, time.UTC)
+		err := dbwriter.ImportRepo(ctx, testDB.DB, entry, 1, snapshotDate)
 		Expect(err).To(BeNil())
 
 		row := testDB.DB.QueryRow(`SELECT COUNT(*) FROM repos WHERE full_name = 'test/demo'`)

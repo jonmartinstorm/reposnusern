@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jonmartinstorm/reposnusern/internal/config"
 	"github.com/jonmartinstorm/reposnusern/internal/dbwriter"
@@ -32,8 +33,8 @@ func (a AppDeps) Fetcher() fetcher.GraphQLFetcher {
 	return a.GitHub
 }
 
-func (AppDeps) ImportRepo(ctx context.Context, db *sql.DB, entry models.RepoEntry, index int) error {
-	return dbwriter.ImportRepo(ctx, db, entry, index)
+func (AppDeps) ImportRepo(ctx context.Context, db *sql.DB, entry models.RepoEntry, index int, snapshotDate time.Time) error {
+	return dbwriter.ImportRepo(ctx, db, entry, index, snapshotDate)
 }
 
 func main() {

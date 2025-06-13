@@ -77,7 +77,7 @@ var _ = Describe("RunAppSafe", func() {
 			Return(&models.RepoEntry{})
 
 		deps.EXPECT().
-			ImportRepo(ctx, db, mock.AnythingOfType("models.RepoEntry"), 1).
+			ImportRepo(ctx, db, mock.AnythingOfType("models.RepoEntry"), 1, mock.AnythingOfType("time.Time")).
 			Return(nil)
 
 		smock.ExpectClose()

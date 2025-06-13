@@ -13,7 +13,8 @@ import (
 const MaxDebugRepos = 10
 
 func Run(ctx context.Context, cfg config.Config, deps RunnerDeps) error {
-	slog.Info("Starter repo-import én og én")
+	snapshotDate := time.Now().Truncate(24 * time.Hour)
+	slog.Info("Starter snapshot", "dato", snapshotDate.Format("2006-01-02"))
 
 	db, err := deps.OpenDB(cfg.PostgresDSN)
 	if err != nil {
@@ -64,7 +65,7 @@ func Run(ctx context.Context, cfg config.Config, deps RunnerDeps) error {
 			repoIndex++
 			slog.Info("Behandler repo", "nummer", repoIndex, "navn", repo.FullName)
 
-			if err := deps.ImportRepo(ctx, db, *entry, repoIndex); err != nil {
+			if err := deps.ImportRepo(ctx, db, *entry, repoIndex, snapshotDate); err != nil {
 				return fmt.Errorf("import repo: %w", err)
 			}
 
