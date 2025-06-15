@@ -8,10 +8,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jonmartinstorm/reposnusern/internal/config"
 	"github.com/jonmartinstorm/reposnusern/internal/models"
 	"github.com/jonmartinstorm/reposnusern/internal/parser"
 	"github.com/jonmartinstorm/reposnusern/internal/storage"
 )
+
+type postgresWriter struct {
+	DB  *sql.DB
+	Ctx context.Context
+	Cfg *config.Config
+}
 
 func SafeLicense(lic *struct{ SpdxID string }) string {
 	if lic == nil {
