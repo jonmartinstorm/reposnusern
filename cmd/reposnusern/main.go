@@ -2,40 +2,16 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/jonmartinstorm/reposnusern/internal/config"
-	"github.com/jonmartinstorm/reposnusern/internal/dbwriter"
 	"github.com/jonmartinstorm/reposnusern/internal/fetcher"
-	"github.com/jonmartinstorm/reposnusern/internal/models"
 	"github.com/jonmartinstorm/reposnusern/internal/runner"
 	_ "github.com/lib/pq"
 )
-
-type AppDeps struct {
-	GitHub fetcher.GitHubAPI
-}
-
-func (AppDeps) OpenDB(dsn string) (*sql.DB, error) {
-	return sql.Open("postgres", dsn)
-}
-
-func (a AppDeps) GetRepoPage(cfg config.Config, page int) ([]models.RepoMeta, error) {
-	return a.GitHub.GetRepoPage(cfg, page)
-}
-
-func (a AppDeps) Fetcher() fetcher.GraphQLFetcher {
-	return a.GitHub
-}
-
-func (AppDeps) ImportRepo(ctx context.Context, db *sql.DB, entry models.RepoEntry, index int, snapshotDate time.Time) error {
-	return dbwriter.ImportRepo(ctx, db, entry, index, snapshotDate)
-}
 
 func main() {
 	// Context for graceful shutdown
@@ -61,7 +37,8 @@ func main() {
 		slog.Info("Inkluderer arkiverte repositories")
 	}
 
-	deps := AppDeps{
+	// TODO her, lag en NewApp greie, og løs det med det. Tenk også DI her.
+	deps := runner.AppDeps{
 		GitHub: &fetcher.GitHubAPIClient{},
 	}
 
