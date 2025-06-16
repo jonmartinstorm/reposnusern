@@ -83,34 +83,6 @@ func ByteSize(b uint64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
-func CheckDatabaseConnection(ctx context.Context, dsn string) error {
-	db, err := OpenSQL("postgres", dsn)
-	if err != nil {
-		slog.Debug("Klarte ikke å åpne databaseforbindelse", "dsn", dsn, "error", err)
-
-		return fmt.Errorf("DB open-feil: %w", err)
-	}
-	if err := db.PingContext(ctx); err != nil {
-		// Lukker eksplisitt på feil, og returnerer
-		if cerr := db.Close(); cerr != nil {
-			slog.Warn("Klarte ikke å lukke testDB", "error", cerr)
-		}
-		slog.Debug("Ping mot database feilet", "dsn", dsn, "error", err)
-
-		return fmt.Errorf("DB ping-feil: %w", err)
-	}
-
-	// Normal defer for clean exit
-	defer func() {
-		if cerr := db.Close(); cerr != nil {
-			slog.Warn("Klarte ikke å lukke testDB", "error", cerr)
-		}
-	}()
-
-	slog.Info("DB-tilkobling OK")
-	return nil
-}
-
 const MaxDebugRepos = 10
 
 func Run(ctx context.Context, cfg config.Config, deps RunnerDeps) error {

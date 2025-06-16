@@ -29,11 +29,6 @@ func main() {
 		slog.Info("Inkluderer arkiverte repositories")
 	}
 
-	if err := runner.CheckDatabaseConnection(ctx, cfg.PostgresDSN); err != nil {
-		slog.Error("Klarte ikke å nå databasen", "error", err)
-		os.Exit(1)
-	}
-
 	// TODO her, lag en NewApp greie, og løs det med det. Tenk også DI her.
 	deps := runner.AppDeps{
 		GitHub: &fetcher.GitHubAPIClient{},
