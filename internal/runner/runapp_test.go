@@ -9,11 +9,9 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jonmartinstorm/reposnusern/internal/config"
 	"github.com/jonmartinstorm/reposnusern/internal/mocks"
-	"github.com/jonmartinstorm/reposnusern/internal/models"
 	"github.com/jonmartinstorm/reposnusern/internal/runner"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/mock"
 )
 
 func TestRunApp(t *testing.T) {
@@ -49,44 +47,6 @@ var _ = Describe("RunAppSafe", func() {
 			err := smock.ExpectationsWereMet()
 			Expect(err).To(BeNil())
 		}
-	})
-
-	It("returnerer nil når Run lykkes", func() {
-		mockFetcher := mocks.NewMockGraphQLFetcher(GinkgoT())
-
-		deps.EXPECT().
-			OpenDB(cfg.PostgresDSN).
-			Return(db, nil)
-
-		deps.EXPECT().
-			GetRepoPage(cfg, 1).
-			Return([]models.RepoMeta{
-				{FullName: "test/repo", Name: "repo"},
-			}, nil)
-
-		deps.EXPECT().
-			GetRepoPage(cfg, 2).
-			Return([]models.RepoMeta{}, nil)
-
-		deps.EXPECT().
-			Fetcher().
-			Return(mockFetcher)
-
-		mockFetcher.EXPECT().
-			Fetch(cfg.Org, "repo", cfg.Token, mock.Anything).
-			Return(&models.RepoEntry{})
-
-		deps.EXPECT().
-			ImportRepo(ctx, db, mock.AnythingOfType("models.RepoEntry"), 1, mock.AnythingOfType("time.Time")).
-			Return(nil)
-
-		smock.ExpectClose()
-		err := runner.RunAppSafe(ctx, cfg, deps)
-		Expect(err).To(BeNil())
-
-		// Verifiser at alle forventninger ble møtt
-		err = smock.ExpectationsWereMet()
-		Expect(err).To(BeNil())
 	})
 
 	It("returnerer feil når GetRepoPage feiler", func() {

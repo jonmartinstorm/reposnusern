@@ -44,9 +44,10 @@ var _ = Describe("dbwriter.ImportRepo", Ordered, func() {
 			},
 			Languages: map[string]int{"Go": 12345},
 		}
+		pgwriter := dbwriter.NewPostgresWriter(ctx, testDB.DB)
 
 		snapshotDate := time.Date(2025, 6, 13, 12, 0, 0, 0, time.UTC)
-		err := dbwriter.ImportRepo(ctx, testDB.DB, entry, 1, snapshotDate)
+		err := pgwriter.ImportRepo(entry, 1, snapshotDate)
 		Expect(err).To(BeNil())
 
 		row := testDB.DB.QueryRow(`SELECT COUNT(*) FROM repos WHERE full_name = 'test/demo'`)

@@ -14,7 +14,7 @@ import (
 	"github.com/jonmartinstorm/reposnusern/internal/models"
 )
 
-// 🔁 Ginkgo sin test-runner. Denne trengs for at "go test" skal vite hvor den skal starte.
+// Ginkgo sin test-runner. Denne trengs for at "go test" skal vite hvor den skal starte.
 func TestFetcher(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Fetcher – GraphQL-funksjoner")

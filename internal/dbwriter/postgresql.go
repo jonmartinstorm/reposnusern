@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jonmartinstorm/reposnusern/internal/config"
 	"github.com/jonmartinstorm/reposnusern/internal/models"
 	"github.com/jonmartinstorm/reposnusern/internal/parser"
 	"github.com/jonmartinstorm/reposnusern/internal/storage"
@@ -17,25 +16,17 @@ import (
 type postgresWriter struct {
 	DB  *sql.DB
 	Ctx context.Context
-	Cfg *config.Config
 }
 
-func SafeLicense(lic *struct{ SpdxID string }) string {
-	if lic == nil {
-		return ""
+func NewPostgresWriter(ctx context.Context, db *sql.DB) *postgresWriter {
+	return &postgresWriter{
+		DB:  db,
+		Ctx: ctx,
 	}
-	return lic.SpdxID
 }
 
-func SafeString(v interface{}) string {
-	if v == nil {
-		return ""
-	}
-	return v.(string)
-}
-
-func ImportRepo(ctx context.Context, db *sql.DB, entry models.RepoEntry, index int, snapshotDate time.Time) error {
-	tx, err := db.BeginTx(ctx, nil)
+func (p *postgresWriter) ImportRepo(entry models.RepoEntry, index int, snapshotDate time.Time) error {
+	tx, err := p.DB.BeginTx(p.Ctx, nil)
 	if err != nil {
 		return fmt.Errorf("start tx: %w", err)
 	}
@@ -70,17 +61,17 @@ func ImportRepo(ctx context.Context, db *sql.DB, entry models.RepoEntry, index i
 		LanguagesUrl: r.LanguagesURL,
 	}
 
-	if err := queries.InsertRepo(ctx, repo); err != nil {
+	if err := queries.InsertRepo(p.Ctx, repo); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
 			return fmt.Errorf("InsertRepo feilet: %v (rollback feilet: %w)", err, rbErr)
 		}
 		return fmt.Errorf("InsertRepo feilet: %w", err)
 	}
 
-	insertLanguages(ctx, queries, id, name, entry.Languages, snapshotDate)
-	insertDockerfiles(ctx, queries, id, name, entry.Files, snapshotDate)
-	insertCIConfig(ctx, queries, id, name, entry.CIConfig, snapshotDate)
-	insertSBOMPackagesGithub(ctx, queries, id, name, entry.SBOM, snapshotDate)
+	insertLanguages(p.Ctx, queries, id, name, entry.Languages, snapshotDate)
+	insertDockerfiles(p.Ctx, queries, id, name, entry.Files, snapshotDate)
+	insertCIConfig(p.Ctx, queries, id, name, entry.CIConfig, snapshotDate)
+	insertSBOMPackagesGithub(p.Ctx, queries, id, name, entry.SBOM, snapshotDate)
 
 	if err := tx.Commit(); err != nil {
 		slog.Error("Commit-feil – ruller tilbake", "repo", name, "error", err)
@@ -240,4 +231,18 @@ func insertSBOMPackagesGithub(
 			slog.Warn("SBOM-insert-feil", "repo", name, "package", nameVal, "error", err)
 		}
 	}
+}
+
+func SafeLicense(lic *struct{ SpdxID string }) string {
+	if lic == nil {
+		return ""
+	}
+	return lic.SpdxID
+}
+
+func SafeString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	return v.(string)
 }

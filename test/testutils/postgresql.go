@@ -23,7 +23,7 @@ func StartTestPostgresContainer() *TestDB {
 
 	req := testcontainers.ContainerRequest{
 		Image:      "postgres:15",
-		SkipReaper: true, // 🔧 Unngå problemer med Ryuk på macOS/Podman
+		SkipReaper: true, // Unngå problemer med Ryuk på macOS/Podman
 		Env: map[string]string{
 			"POSTGRES_USER":     "test",
 			"POSTGRES_PASSWORD": "test",
@@ -38,17 +38,17 @@ func StartTestPostgresContainer() *TestDB {
 		Started:          true,
 	})
 	if err != nil {
-		log.Fatalf("❌ Kunne ikke starte testcontainer: %v", err)
+		log.Fatalf("Kunne ikke starte testcontainer: %v", err)
 	}
 
 	host, err := container.Host(ctx)
 	if err != nil {
-		log.Fatalf("❌ Klarte ikke hente host fra container: %v", err)
+		log.Fatalf("Klarte ikke hente host fra container: %v", err)
 	}
 
 	port, err := container.MappedPort(ctx, "5432")
 	if err != nil {
-		log.Fatalf("❌ Klarte ikke hente port fra container: %v", err)
+		log.Fatalf("Klarte ikke hente port fra container: %v", err)
 	}
 
 	dsn := fmt.Sprintf("postgres://test:test@%s:%s/testdb?sslmode=disable", host, port.Port())
@@ -57,14 +57,14 @@ func StartTestPostgresContainer() *TestDB {
 	for retries := 0; retries < 10; retries++ {
 		db, err = sql.Open("postgres", dsn)
 		if err == nil && db.PingContext(ctx) == nil {
-			log.Println("✅ Databasen er klar")
+			log.Println("Databasen er klar")
 			break
 		}
-		log.Println("⏳ Venter på at databasen skal bli klar...")
+		log.Println("Venter på at databasen skal bli klar...")
 		time.Sleep(1 * time.Second)
 	}
 	if err != nil {
-		log.Fatalf("❌ Klarte ikke koble til databasen: %v", err)
+		log.Fatalf("Klarte ikke koble til databasen: %v", err)
 	}
 
 	return &TestDB{
@@ -77,17 +77,17 @@ func (t *TestDB) Close() {
 	ctx := context.Background()
 
 	if err := t.DB.Close(); err != nil {
-		log.Printf("⚠️ Kunne ikke lukke databaseforbindelsen: %v", err)
+		log.Printf("Kunne ikke lukke databaseforbindelsen: %v", err)
 	}
 	if err := t.container.Terminate(ctx); err != nil {
-		log.Printf("⚠️ Kunne ikke stoppe testcontaineren: %v", err)
+		log.Printf("Kunne ikke stoppe testcontaineren: %v", err)
 	}
 }
 
 func RunMigrations(db *sql.DB) {
 	root, err := os.Getwd()
 	if err != nil {
-		log.Fatalf("❌ Kunne ikke hente arbeidskatalog: %v", err)
+		log.Fatalf("Kunne ikke hente arbeidskatalog: %v", err)
 	}
 
 	schemaPath := root + "/db/schema.sql"
@@ -97,9 +97,9 @@ func RunMigrations(db *sql.DB) {
 
 	schema, err := os.ReadFile(schemaPath)
 	if err != nil {
-		log.Fatalf("❌ Kunne ikke lese schema.sql: %v", err)
+		log.Fatalf("Kunne ikke lese schema.sql: %v", err)
 	}
 	if _, err := db.Exec(string(schema)); err != nil {
-		log.Fatalf("❌ Klarte ikke å kjøre migrering: %v", err)
+		log.Fatalf("Klarte ikke å kjøre migrering: %v", err)
 	}
 }

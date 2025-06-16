@@ -14,10 +14,13 @@ import (
 	"github.com/jonmartinstorm/reposnusern/internal/models"
 )
 
+type DBWriter interface {
+	ImportRepo(entry models.RepoEntry, index int, snapshotDate time.Time) error
+}
+
 type RunnerDeps interface {
 	OpenDB(dsn string) (*sql.DB, error)
 	GetRepoPage(cfg config.Config, page int) ([]models.RepoMeta, error)
-	ImportRepo(ctx context.Context, db *sql.DB, entry models.RepoEntry, index int, snapshotDate time.Time) error
 	Fetcher() fetcher.GraphQLFetcher
 }
 
@@ -35,10 +38,6 @@ func (a AppDeps) GetRepoPage(cfg config.Config, page int) ([]models.RepoMeta, er
 
 func (a AppDeps) Fetcher() fetcher.GraphQLFetcher {
 	return a.GitHub
-}
-
-func (AppDeps) ImportRepo(ctx context.Context, db *sql.DB, entry models.RepoEntry, index int, snapshotDate time.Time) error {
-	return dbwriter.ImportRepo(ctx, db, entry, index, snapshotDate)
 }
 
 var OpenSQL = sql.Open
@@ -131,6 +130,7 @@ func Run(ctx context.Context, cfg config.Config, deps RunnerDeps) error {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(10 * time.Minute)
+	pgwriter := dbwriter.NewPostgresWriter(ctx, db)
 
 	page := 1
 	repoIndex := 0
@@ -167,7 +167,7 @@ func Run(ctx context.Context, cfg config.Config, deps RunnerDeps) error {
 			repoIndex++
 			slog.Info("Behandler repo", "nummer", repoIndex, "navn", repo.FullName)
 
-			if err := deps.ImportRepo(ctx, db, *entry, repoIndex, snapshotDate); err != nil {
+			if err := pgwriter.ImportRepo(*entry, repoIndex, snapshotDate); err != nil {
 				return fmt.Errorf("import repo: %w", err)
 			}
 
