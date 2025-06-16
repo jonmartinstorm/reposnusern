@@ -8,7 +8,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/jonmartinstorm/reposnusern/internal/config"
+	"github.com/jonmartinstorm/reposnusern/internal/dbwriter"
+	"github.com/jonmartinstorm/reposnusern/internal/models"
 	_ "github.com/lib/pq"
+	"github.com/stretchr/testify/mock"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -16,6 +20,33 @@ import (
 type TestDB struct {
 	DB        *sql.DB
 	container testcontainers.Container
+}
+
+type MockFetcher struct {
+	mock.Mock
+}
+
+func (m *MockFetcher) GetReposPage(ctx context.Context, cfg config.Config, page int) ([]models.RepoMeta, error) {
+	args := m.Called(ctx, cfg, page)
+	return args.Get(0).([]models.RepoMeta), args.Error(1)
+}
+
+func (m *MockFetcher) FetchRepoGraphQL(ctx context.Context, base models.RepoMeta) (*models.RepoEntry, error) {
+	args := m.Called(ctx, base)
+	return args.Get(0).(*models.RepoEntry), args.Error(1)
+}
+
+type RealPostgresWriter struct {
+	db *sql.DB
+}
+
+func NewRealPostgresWriter(db *sql.DB) *RealPostgresWriter {
+	return &RealPostgresWriter{db: db}
+}
+
+func (r *RealPostgresWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, index int, snapshot time.Time) error {
+	pw := &dbwriter.PostgresWriter{DB: r.db}
+	return pw.ImportRepo(ctx, entry, index, snapshot)
 }
 
 func StartTestPostgresContainer() *TestDB {

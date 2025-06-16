@@ -13,20 +13,28 @@ import (
 	"github.com/jonmartinstorm/reposnusern/internal/storage"
 )
 
-type postgresWriter struct {
-	DB  *sql.DB
-	Ctx context.Context
+type PostgresWriter struct {
+	DB *sql.DB
 }
 
-func NewPostgresWriter(ctx context.Context, db *sql.DB) *postgresWriter {
-	return &postgresWriter{
-		DB:  db,
-		Ctx: ctx,
+func NewPostgresWriter(postgresdsn string) (*PostgresWriter, error) {
+	db, err := sql.Open("postgres", postgresdsn)
+	if err != nil {
+		slog.Error("Kunne ikke åpne PostgreSQL-database", "dsn", postgresdsn, "error", err)
+		return nil, fmt.Errorf("kunne ikke åpne PostgreSQL-database: %w", err)
 	}
+
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(10 * time.Minute)
+
+	return &PostgresWriter{
+		DB: db,
+	}, nil
 }
 
-func (p *postgresWriter) ImportRepo(entry models.RepoEntry, index int, snapshotDate time.Time) error {
-	tx, err := p.DB.BeginTx(p.Ctx, nil)
+func (p *PostgresWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, index int, snapshotDate time.Time) error {
+	tx, err := p.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("start tx: %w", err)
 	}
@@ -61,17 +69,17 @@ func (p *postgresWriter) ImportRepo(entry models.RepoEntry, index int, snapshotD
 		LanguagesUrl: r.LanguagesURL,
 	}
 
-	if err := queries.InsertRepo(p.Ctx, repo); err != nil {
+	if err := queries.InsertRepo(ctx, repo); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
 			return fmt.Errorf("InsertRepo feilet: %v (rollback feilet: %w)", err, rbErr)
 		}
 		return fmt.Errorf("InsertRepo feilet: %w", err)
 	}
 
-	insertLanguages(p.Ctx, queries, id, name, entry.Languages, snapshotDate)
-	insertDockerfiles(p.Ctx, queries, id, name, entry.Files, snapshotDate)
-	insertCIConfig(p.Ctx, queries, id, name, entry.CIConfig, snapshotDate)
-	insertSBOMPackagesGithub(p.Ctx, queries, id, name, entry.SBOM, snapshotDate)
+	insertLanguages(ctx, queries, id, name, entry.Languages, snapshotDate)
+	insertDockerfiles(ctx, queries, id, name, entry.Files, snapshotDate)
+	insertCIConfig(ctx, queries, id, name, entry.CIConfig, snapshotDate)
+	insertSBOMPackagesGithub(ctx, queries, id, name, entry.SBOM, snapshotDate)
 
 	if err := tx.Commit(); err != nil {
 		slog.Error("Commit-feil – ruller tilbake", "repo", name, "error", err)

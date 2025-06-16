@@ -17,20 +17,8 @@ import (
 	"github.com/jonmartinstorm/reposnusern/internal/models"
 )
 
-type GitHubAPIClient struct{}
-
-type GitHubClient interface {
-	GetRepoPage(cfg config.Config, page int) ([]models.RepoMeta, error)
-}
-
-type GraphQLFetcher interface {
-	Fetch(owner, name, token string, baseRepo models.RepoMeta) *models.RepoEntry
-}
-
-// Kombinerer begge i én (valgfritt, men ryddig hvis du bruker begge via én struct)
-type GitHubAPI interface {
-	GitHubClient
-	GraphQLFetcher
+type RepoFetcher struct {
+	Cfg config.Config
 }
 
 type TreeFile struct {
@@ -42,11 +30,64 @@ type TreeFile struct {
 // Injecter en klient (for testbarhet)
 var HttpClient = http.DefaultClient
 
-func DoRequestWithRateLimit(method, url, token string, body []byte, out interface{}) error {
+func NewRepoFetcher(cfg config.Config) *RepoFetcher {
+	return &RepoFetcher{
+		Cfg: cfg,
+	}
+}
+
+func (r *RepoFetcher) GetReposPage(ctx context.Context, cfg config.Config, page int) ([]models.RepoMeta, error) {
+	url := fmt.Sprintf("https://api.github.com/orgs/%s/repos?per_page=100&type=all&page=%d", cfg.Org, page)
+	var pageRepos []models.RepoMeta
+	slog.Info("Henter repos", "page", page)
+
+	err := DoRequestWithRateLimit(ctx, "GET", url, cfg.Token, nil, &pageRepos)
+	if err != nil {
+		return nil, err
+	}
+
+	return pageRepos, nil
+}
+
+func (r *RepoFetcher) FetchRepoGraphQL(ctx context.Context, baseRepo models.RepoMeta) (*models.RepoEntry, error) {
+	query := BuildRepoQuery(r.Cfg.Org, baseRepo.Name)
+
+	reqBody := map[string]string{"query": query}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		slog.Error("Kunne ikke serialisere GraphQL-request", "repo", r.Cfg.Org+"/"+baseRepo.Name, "error", err)
+		return nil, err
+	}
+
+	var result map[string]interface{}
+	err = DoRequestWithRateLimit(ctx, "POST", "https://api.github.com/graphql", r.Cfg.Token, bodyBytes, &result)
+	if err != nil {
+		slog.Error("GraphQL-kall feilet", "repo", r.Cfg.Org+"/"+baseRepo.Name, "error", err)
+		return nil, err
+	}
+
+	if errs, ok := result["errors"]; ok {
+		slog.Warn("GraphQL-resultat har feil", "repo", r.Cfg.Org+"/"+baseRepo.Name, "errors", errs)
+	}
+
+	data, ok := result["data"].(map[string]interface{})
+	if !ok || data["repository"] == nil {
+		slog.Warn("Ingen repository-data fra GraphQL", "repo", r.Cfg.Org+"/"+baseRepo.Name)
+		return nil, fmt.Errorf("ingen repository-data for %s/%s", r.Cfg.Org, baseRepo.Name)
+	}
+
+	sbom := fetchSBOM(ctx, r.Cfg.Org, baseRepo.Name, r.Cfg.Token)
+	entry := ParseRepoData(data, baseRepo)
+
+	entry.SBOM = sbom
+	return entry, nil
+}
+
+func DoRequestWithRateLimit(ctx context.Context, method, url, token string, body []byte, out interface{}) error {
 	for {
 		slog.Info("Henter URL", "url", url)
 
-		req, err := http.NewRequestWithContext(context.Background(), method, url, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
 		if err != nil {
 			return err
 		}
@@ -86,62 +127,11 @@ func DoRequestWithRateLimit(method, url, token string, body []byte, out interfac
 	}
 }
 
-func (g *GitHubAPIClient) GetRepoPage(cfg config.Config, page int) ([]models.RepoMeta, error) {
-	url := fmt.Sprintf("https://api.github.com/orgs/%s/repos?per_page=100&type=all&page=%d", cfg.Org, page)
-	var pageRepos []models.RepoMeta
-	slog.Info("Henter repos", "page", page)
-
-	err := DoRequestWithRateLimit("GET", url, cfg.Token, nil, &pageRepos)
-	if err != nil {
-		return nil, err
-	}
-
-	return pageRepos, nil
-}
-
-func (g *GitHubAPIClient) Fetch(owner, name, token string, baseRepo models.RepoMeta) *models.RepoEntry {
-	return FetchRepoGraphQL(owner, name, token, baseRepo)
-}
-
-func FetchRepoGraphQL(owner, name, token string, baseRepo models.RepoMeta) *models.RepoEntry {
-	query := BuildRepoQuery(owner, name)
-
-	reqBody := map[string]string{"query": query}
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		slog.Error("Kunne ikke serialisere GraphQL-request", "repo", owner+"/"+name, "error", err)
-		return nil
-	}
-
-	var result map[string]interface{}
-	err = DoRequestWithRateLimit("POST", "https://api.github.com/graphql", token, bodyBytes, &result)
-	if err != nil {
-		slog.Error("GraphQL-kall feilet", "repo", owner+"/"+name, "error", err)
-		return nil
-	}
-
-	if errs, ok := result["errors"]; ok {
-		slog.Warn("GraphQL-resultat har feil", "repo", owner+"/"+name, "errors", errs)
-	}
-
-	data, ok := result["data"].(map[string]interface{})
-	if !ok || data["repository"] == nil {
-		slog.Warn("Ingen repository-data fra GraphQL", "repo", owner+"/"+name)
-		return nil
-	}
-
-	sbom := FetchSBOM(owner, name, token)
-	entry := ParseRepoData(data, baseRepo)
-
-	entry.SBOM = sbom
-	return entry
-}
-
-func FetchSBOM(owner, repo, token string) map[string]interface{} {
+func fetchSBOM(ctx context.Context, owner, repo, token string) map[string]interface{} {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/dependency-graph/sbom", owner, repo)
 
 	var sbom map[string]interface{}
-	err := DoRequestWithRateLimit("GET", url, token, nil, &sbom)
+	err := DoRequestWithRateLimit(ctx, "GET", url, token, nil, &sbom)
 	if err != nil {
 		slog.Warn("SBOM-kall feilet", "repo", owner+"/"+repo, "error", err)
 		return nil

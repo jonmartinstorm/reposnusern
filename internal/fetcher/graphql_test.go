@@ -1,6 +1,7 @@
 package fetcher_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -279,9 +280,9 @@ var _ = Describe("doRequestWithRateLimit", func() {
 		defer ts.Close()
 
 		fetcher.HttpClient = ts.Client()
-
+		ctx := context.Background()
 		var result struct{ Message string }
-		err := fetcher.DoRequestWithRateLimit("GET", ts.URL, "dummy-token", nil, &result)
+		err := fetcher.DoRequestWithRateLimit(ctx, "GET", ts.URL, "dummy-token", nil, &result)
 		Expect(err).To(BeNil())
 		Expect(result.Message).To(Equal("ok"))
 		Expect(callCount).To(BeNumerically(">=", 2))
@@ -297,22 +298,25 @@ var _ = Describe("doRequestWithRateLimit", func() {
 		defer ts.Close()
 
 		fetcher.HttpClient = ts.Client()
+		ctx := context.Background()
 
 		var result struct{ Message string }
-		err := fetcher.DoRequestWithRateLimit("POST", ts.URL, "token", []byte(`{}`), &result)
+		err := fetcher.DoRequestWithRateLimit(ctx, "POST", ts.URL, "token", []byte(`{}`), &result)
 		Expect(err).To(BeNil())
 		Expect(result.Message).To(Equal("ok"))
 	})
 
 	It("skal feile på ugyldig URL (DNS-feil)", func() {
 		var result any
-		err := fetcher.DoRequestWithRateLimit("GET", "http://invalid-url", "token", nil, &result)
+		ctx := context.Background()
+		err := fetcher.DoRequestWithRateLimit(ctx, "GET", "http://invalid-url", "token", nil, &result)
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("skal feile på ugyldig request-format (syntax)", func() {
 		var result any
-		err := fetcher.DoRequestWithRateLimit("GET", ":", "token", nil, &result)
+		ctx := context.Background()
+		err := fetcher.DoRequestWithRateLimit(ctx, "GET", ":", "token", nil, &result)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -324,9 +328,10 @@ var _ = Describe("doRequestWithRateLimit", func() {
 		defer ts.Close()
 
 		fetcher.HttpClient = ts.Client()
+		ctx := context.Background()
 
 		var result any
-		err := fetcher.DoRequestWithRateLimit("GET", ts.URL, "token", nil, &result)
+		err := fetcher.DoRequestWithRateLimit(ctx, "GET", ts.URL, "token", nil, &result)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("GitHub API-feil"))
 		Expect(err.Error()).To(ContainSubstring("403"))
