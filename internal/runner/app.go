@@ -12,6 +12,7 @@ import (
 	"github.com/jonmartinstorm/reposnusern/internal/dbwriter"
 	"github.com/jonmartinstorm/reposnusern/internal/fetcher"
 	"github.com/jonmartinstorm/reposnusern/internal/models"
+	_ "github.com/lib/pq"
 )
 
 type DBWriter interface {
@@ -22,6 +23,11 @@ type RunnerDeps interface {
 	OpenDB(dsn string) (*sql.DB, error)
 	GetRepoPage(cfg config.Config, page int) ([]models.RepoMeta, error)
 	Fetcher() fetcher.GraphQLFetcher
+}
+
+type App struct {
+	Deps RunnerDeps
+	Cfg  config.Config
 }
 
 type AppDeps struct {
@@ -42,8 +48,15 @@ func (a AppDeps) Fetcher() fetcher.GraphQLFetcher {
 
 var OpenSQL = sql.Open
 
-func RunApp(ctx context.Context, cfg config.Config, deps RunnerDeps) error {
-	return RunAppSafe(ctx, cfg, deps)
+func NewApp(cfg config.Config, deps RunnerDeps) *App {
+	return &App{
+		Deps: deps,
+		Cfg:  cfg,
+	}
+}
+
+func (a *App) RunApp(ctx context.Context) error {
+	return RunAppSafe(ctx, a.Cfg, a.Deps)
 }
 
 func RunAppSafe(ctx context.Context, cfg config.Config, deps RunnerDeps) error {

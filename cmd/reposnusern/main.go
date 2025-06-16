@@ -9,7 +9,6 @@ import (
 	"github.com/jonmartinstorm/reposnusern/internal/fetcher"
 	"github.com/jonmartinstorm/reposnusern/internal/logger"
 	"github.com/jonmartinstorm/reposnusern/internal/runner"
-	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -29,12 +28,11 @@ func main() {
 		slog.Info("Inkluderer arkiverte repositories")
 	}
 
-	// TODO her, lag en NewApp greie, og løs det med det. Tenk også DI her.
-	deps := runner.AppDeps{
+	app := runner.NewApp(cfg, &runner.AppDeps{
 		GitHub: &fetcher.GitHubAPIClient{},
-	}
+	})
 
-	if err := runner.RunApp(ctx, cfg, deps); err != nil {
+	if err := app.RunApp(ctx); err != nil {
 		slog.Error("Applikasjonen feilet", "error", err)
 		os.Exit(1)
 	}
