@@ -31,12 +31,13 @@ jobs:
       - name: 📦 Installer mockery v3
         run: go install github.com/vektra/mockery/v3@latest
 
+
       - name: 🧼 Installer golangci-lint
         run: |
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.1.6
 
       - name: 🧪 Unit-tester + vet + lint
-        run: make tidy vet lint unit
+        run: make generate-mocks tidy vet lint unit
 
   integration-postgres:
     name: 🐘 PostgreSQL integrasjonstest
@@ -48,6 +49,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+
+      - name: 📦 Installer mockery v3
+        run: go install github.com/vektra/mockery/v3@latest
+
+      - name: 🔧 Generer mocks
+        run: make generate-mocks
 
       - name: 🚀 Kjør Postgres-integrasjonstest
         run: go test -v -run TestAppIntegration ./test
@@ -62,6 +69,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+
+      - name: 📦 Installer mockery v3
+        run: go install github.com/vektra/mockery/v3@latest
+
+      - name: 🔧 Generer mocks
+        run: make generate-mocks
 
       - name: 🚀 Kjør BigQuery-integrasjonstest
         run: go test -v -run TestAppBigQueryIntegration ./test
