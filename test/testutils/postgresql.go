@@ -123,7 +123,7 @@ func RunMigrations(db *sql.DB) {
 
 	schemaPath := root + "/db/schema.sql"
 	if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
-		schemaPath = root + "/../db/schema.sql"
+		schemaPath = root + "/../../db/schema.sql"
 	}
 
 	schema, err := os.ReadFile(schemaPath)

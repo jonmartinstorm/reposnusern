@@ -57,7 +57,7 @@ jobs:
         run: make generate-mocks
 
       - name: 🚀 Kjør Postgres-integrasjonstest
-        run: go test -v -run TestAppIntegration ./test
+        run: go test -v ./test/integration_postgres
 
   integration-bigquery:
     name: 🧪 BigQuery integrasjonstest
@@ -77,4 +77,4 @@ jobs:
         run: make generate-mocks
 
       - name: 🚀 Kjør BigQuery-integrasjonstest
-        run: go test -v -run TestAppBigQueryIntegration ./test
+        run: go test -v ./test/integration_bigquery

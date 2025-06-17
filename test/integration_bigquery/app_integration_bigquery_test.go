@@ -1,4 +1,4 @@
-package test
+package bigquery_test
 
 import (
 	"context"
