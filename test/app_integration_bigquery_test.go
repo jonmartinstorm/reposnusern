@@ -5,8 +5,14 @@ import (
 	"testing"
 
 	"cloud.google.com/go/bigquery"
+	"github.com/jonmartinstorm/reposnusern/internal/bqwriter"
+	"github.com/jonmartinstorm/reposnusern/internal/config"
+	"github.com/jonmartinstorm/reposnusern/internal/models"
+	"github.com/jonmartinstorm/reposnusern/internal/runner"
+	"github.com/jonmartinstorm/reposnusern/test/testutils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 	"github.com/testcontainers/testcontainers-go"
 	tcbq "github.com/testcontainers/testcontainers-go/modules/gcloud/bigquery"
 	"google.golang.org/api/option"
@@ -20,11 +26,17 @@ func TestAppBigQueryIntegration(t *testing.T) {
 	RunSpecs(t, "App-integrasjon BigQuery")
 }
 
-var _ = Describe("BigQuery emulator integrasjon", Ordered, func() {
+var _ = Describe("runner.App BigQuery", Ordered, func() {
 	var (
 		ctx       context.Context
 		container *tcbq.Container
 		client    *bigquery.Client
+		app       *runner.App
+	)
+
+	const (
+		datasetID = "test_dataset"
+		tableID   = "repos"
 	)
 
 	BeforeAll(func() {
@@ -46,6 +58,29 @@ var _ = Describe("BigQuery emulator integrasjon", Ordered, func() {
 		}
 		client, err = bigquery.NewClient(ctx, container.ProjectID(), opts...)
 		Expect(err).To(BeNil())
+
+		// Lag dataset og tabellen som appen forventer
+		err = client.Dataset(datasetID).Create(ctx, &bigquery.DatasetMetadata{Location: "US"})
+		Expect(err).To(BeNil())
+
+		schema := bigquery.Schema{
+			{Name: "repo_id", Type: bigquery.IntegerFieldType},
+			{Name: "full_name", Type: bigquery.StringFieldType},
+			{Name: "topics", Type: bigquery.StringFieldType, Repeated: true},
+			{Name: "stars", Type: bigquery.IntegerFieldType},
+			{Name: "license", Type: bigquery.StringFieldType},
+			{Name: "snapshot_date", Type: bigquery.TimestampFieldType},
+			{Name: "updated_at", Type: bigquery.TimestampFieldType},
+			{Name: "has_sbom", Type: bigquery.BooleanFieldType},
+			{Name: "sbom_packages", Type: bigquery.RecordFieldType, Repeated: true, Schema: bigquery.Schema{
+				{Name: "name", Type: bigquery.StringFieldType},
+				{Name: "version", Type: bigquery.StringFieldType},
+				{Name: "license", Type: bigquery.StringFieldType},
+				{Name: "purl", Type: bigquery.StringFieldType},
+			}},
+		}
+		err = client.Dataset(datasetID).Table(tableID).Create(ctx, &bigquery.TableMetadata{Schema: schema})
+		Expect(err).To(BeNil())
 	})
 
 	AfterAll(func() {
@@ -57,42 +92,57 @@ var _ = Describe("BigQuery emulator integrasjon", Ordered, func() {
 		}
 	})
 
-	It("oppretter tabell og henter ut rader", func() {
-		datasetID := "test_dataset"
-		tableID := "people"
-
-		// Opprett dataset
-		err := client.Dataset(datasetID).Create(ctx, &bigquery.DatasetMetadata{
-			Location: "US",
-		})
-		Expect(err).To(BeNil())
-
-		// Opprett tabell
-		schema := bigquery.Schema{
-			{Name: "id", Type: bigquery.IntegerFieldType},
-			{Name: "name", Type: bigquery.StringFieldType},
+	It("kjører hele appen og skriver til BigQuery", func() {
+		cfg := config.Config{
+			Org:         "testorg",
+			Token:       "123",
+			Debug:       true,
+			Parallelism: 2,
+			BQProjectID: container.ProjectID(),
+			BQDataset:   datasetID,
+			BQTable:     tableID,
 		}
-		table := client.Dataset(datasetID).Table(tableID)
-		err = table.Create(ctx, &bigquery.TableMetadata{Schema: schema})
+
+		writer := &bqwriter.BigQueryWriter{
+			Client:  client,
+			Dataset: datasetID,
+		}
+
+		mockRepos := []models.RepoMeta{
+			{ID: 1, Name: "demo", FullName: "testorg/demo"},
+			{ID: 2, Name: "lib", FullName: "testorg/lib"},
+		}
+
+		fetcher := &testutils.MockFetcher{}
+		fetcher.On("GetReposPage", mock.Anything, cfg, 1).Return(mockRepos, nil)
+		fetcher.On("GetReposPage", mock.Anything, cfg, 2).Return([]models.RepoMeta{}, nil)
+
+		for i, repo := range mockRepos {
+			entry := &models.RepoEntry{
+				Repo: models.RepoMeta{
+					ID:       repo.ID,
+					Name:     repo.Name,
+					FullName: repo.FullName,
+					Language: "Go",
+					License:  &models.License{SpdxID: "MIT"},
+					Topics:   []string{"oss"},
+				},
+				Languages: map[string]int{"Go": 1000 + i},
+			}
+			fetcher.On("FetchRepoGraphQL", mock.Anything, repo).Return(entry, nil)
+		}
+
+		app = runner.NewApp(cfg, writer, fetcher)
+
+		err := app.Run(ctx)
 		Expect(err).To(BeNil())
 
-		// Sett inn én rad
-		inserter := table.Inserter()
-		err = inserter.Put(ctx, []*bigquery.ValuesSaver{
-			{
-				Schema: schema,
-				Row:    []bigquery.Value{1, "Alice"},
-			},
-		})
-		Expect(err).To(BeNil())
-
-		// Spørr og sjekk resultat
-		query := client.Query("SELECT name FROM `test.test_dataset.people` WHERE id = 1")
-		it, err := query.Read(ctx)
+		q := client.Query("SELECT COUNT(*) FROM `" + cfg.BQDataset + "." + cfg.BQTable + "` WHERE full_name LIKE 'testorg/%'")
+		it, err := q.Read(ctx)
 		Expect(err).To(BeNil())
 
 		var row []bigquery.Value
 		Expect(it.Next(&row)).To(BeTrue())
-		Expect(row[0]).To(Equal("Alice"))
+		Expect(row[0]).To(Equal(int64(2)))
 	})
 })
