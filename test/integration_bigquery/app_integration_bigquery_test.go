@@ -92,6 +92,18 @@ var _ = Describe("runner.App BigQuery", Ordered, func() {
 		}
 	})
 
+	AfterEach(func() {
+		// Sjekk at minst én rad finnes i BigQuery etter kjøring
+		q := client.Query("SELECT COUNT(*) FROM `" + datasetID + "." + tableID + "`")
+		it, err := q.Read(ctx)
+		Expect(err).To(BeNil())
+
+		var row []bigquery.Value
+		hasRow := it.Next(&row)
+		Expect(hasRow).To(BeTrue(), "Forventer minst én rad skrevet til BigQuery")
+		Expect(row[0]).To(BeNumerically(">", 0), "Ingen rader skrevet til BigQuery")
+	})
+
 	It("kjører hele appen og skriver til BigQuery", func() {
 		cfg := config.Config{
 			Org:         "testorg",
@@ -142,6 +154,7 @@ var _ = Describe("runner.App BigQuery", Ordered, func() {
 		Expect(err).To(BeNil())
 
 		var row []bigquery.Value
+
 		Expect(it.Next(&row)).To(BeTrue())
 		Expect(row[0]).To(Equal(int64(2)))
 	})
