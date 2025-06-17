@@ -94,7 +94,7 @@ var _ = Describe("Mapping-funksjoner", func() {
 	})
 
 	It("konverterer dockerfile-features riktig", func() {
-		features := bqwriter.ConvertDockerfileFeatures(entry, snapshot)
+		features, _ := bqwriter.ConvertDockerfileFeatures(entry, snapshot)
 		Expect(features).To(HaveLen(1))
 		Expect(features[0].Content).To(ContainSubstring("FROM alpine"))
 	})

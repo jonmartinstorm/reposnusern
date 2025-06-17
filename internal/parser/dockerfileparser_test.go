@@ -16,7 +16,7 @@ func TestParser(t *testing.T) {
 var _ = Describe("ParseDockerfile", func() {
 	DescribeTable("Basic parsing",
 		func(content string, expected parser.DockerfileFeatures) {
-			result := parser.ParseDockerfile(content)
+			result, _ := parser.ParseDockerfile(content)
 			Expect(result).To(Equal(expected))
 		},
 
@@ -85,7 +85,7 @@ USER appuser
 ADD file.tar.gz /app
 RUN apt-get update && apt-get install -y gcc make curl && apt-get clean
 `
-		f := parser.ParseDockerfile(content)
+		f, _ := parser.ParseDockerfile(content)
 
 		Expect(f.HasUserInstruction).To(BeTrue())
 		Expect(f.UsesAddInstruction).To(BeTrue())
@@ -103,7 +103,7 @@ EXPOSE 443
 HEALTHCHECK CMD curl -f http://localhost || exit 1
 RUN chmod 777 /tmp/file
 `
-		f := parser.ParseDockerfile(content)
+		f, _ := parser.ParseDockerfile(content)
 
 		Expect(f.HasLabelMetadata).To(BeTrue())
 		Expect(f.HasExpose).To(BeTrue())

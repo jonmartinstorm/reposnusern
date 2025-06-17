@@ -32,6 +32,7 @@ func NewBigQueryWriter(ctx context.Context, cfg *config.Config) (*BigQueryWriter
 		"repos":               BGRepoEntry{},
 		"repo_languages":      BGRepoLanguage{},
 		"dockerfile_features": BGDockerfileFeatures{},
+		"dockerfile_stages":   BGDockerStageMeta{},
 		"ci_config":           BGCIConfig{},
 		"sbom_packages":       BGSBOMPackages{},
 	}
@@ -51,7 +52,7 @@ func NewBigQueryWriter(ctx context.Context, cfg *config.Config) (*BigQueryWriter
 func (w *BigQueryWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, snapshot time.Time) error {
 	repo := ConvertToBG(entry, snapshot)
 	langs := ConvertLanguages(entry, snapshot)
-	dockerfileFeatures := ConvertDockerfileFeatures(entry, snapshot)
+	dockerfileFeatures, dockerfileStages := ConvertDockerfileFeatures(entry, snapshot)
 	ciconfig := ConvertCI(entry, snapshot)
 	sbom := ConvertSBOMPackages(entry, snapshot)
 
@@ -63,6 +64,9 @@ func (w *BigQueryWriter) ImportRepo(ctx context.Context, entry models.RepoEntry,
 	}
 	if err := insert(ctx, w.Client, w.Dataset, "dockerfile_features", dockerfileFeatures); err != nil {
 		return fmt.Errorf("dockerfile_features insert failed: %w", err)
+	}
+	if err := insert(ctx, w.Client, w.Dataset, "dockerfile_stages", dockerfileStages); err != nil {
+		return fmt.Errorf("dockerfile_stagesinsert failed: %w", err)
 	}
 	if err := insert(ctx, w.Client, w.Dataset, "ci_config", ciconfig); err != nil {
 		return fmt.Errorf("ci_config insert failed: %w", err)
@@ -123,10 +127,8 @@ type BGDockerfileFeatures struct {
 	RepoID               int64     `bigquery:"repo_id"`
 	WhenCollected        time.Time `bigquery:"when_collected"`
 	FileType             string    `bigquery:"file_type"`
-	Path                 string    `bigquery:"path"`
 	Content              string    `bigquery:"content"`
-	BaseImage            string    `bigquery:"base_image"`
-	BaseTag              string    `bigquery:"base_tag"`
+	Path                 string    `bigquery:"path"`
 	UsesLatestTag        bool      `bigquery:"uses_latest_tag"`
 	HasUserInstruction   bool      `bigquery:"has_user_instruction"`
 	HasCopySensitive     bool      `bigquery:"has_copy_sensitive"`
@@ -142,6 +144,15 @@ type BGDockerfileFeatures struct {
 	HasAptGetClean       bool      `bigquery:"has_apt_get_clean"`
 	WorldWritable        bool      `bigquery:"world_writable"`
 	HasSecretsInEnvOrArg bool      `bigquery:"has_secrets_in_env_or_arg"`
+}
+
+type BGDockerStageMeta struct {
+	RepoID        int64     `bigquery:"repo_id"`
+	WhenCollected time.Time `bigquery:"when_collected"`
+	Path          string    `bigquery:"path"`
+	StageIndex    int       `bigquery:"stage_index"`
+	BaseImage     string    `bigquery:"base_image"`
+	BaseTag       string    `bigquery:"base_tag"`
 }
 
 type BGCIConfig struct {
@@ -206,24 +217,23 @@ func ConvertLanguages(entry models.RepoEntry, snapshot time.Time) []BGRepoLangua
 	return result
 }
 
-func ConvertDockerfileFeatures(entry models.RepoEntry, snapshot time.Time) []BGDockerfileFeatures {
-	var result []BGDockerfileFeatures
+func ConvertDockerfileFeatures(entry models.RepoEntry, snapshot time.Time) ([]BGDockerfileFeatures, []BGDockerStageMeta) {
+	var dff []BGDockerfileFeatures
+	var dsm []BGDockerStageMeta
 
 	for typ, list := range entry.Files {
 		if !strings.HasPrefix(strings.ToLower(typ), "dockerfile") {
 			continue
 		}
 		for _, f := range list {
-			features := parser.ParseDockerfile(f.Content)
+			features, stages := parser.ParseDockerfile(f.Content)
 
-			result = append(result, BGDockerfileFeatures{
+			dff = append(dff, BGDockerfileFeatures{
 				RepoID:               entry.Repo.ID,
 				WhenCollected:        snapshot,
 				FileType:             typ,
 				Path:                 f.Path,
 				Content:              f.Content,
-				BaseImage:            features.BaseImage,
-				BaseTag:              features.BaseTag,
 				UsesLatestTag:        features.UsesLatestTag,
 				HasUserInstruction:   features.HasUserInstruction,
 				HasCopySensitive:     features.HasCopySensitive,
@@ -240,10 +250,21 @@ func ConvertDockerfileFeatures(entry models.RepoEntry, snapshot time.Time) []BGD
 				WorldWritable:        features.WorldWritable,
 				HasSecretsInEnvOrArg: features.HasSecretsInEnvOrArg,
 			})
+
+			for _, stage := range stages {
+				dsm = append(dsm, BGDockerStageMeta{
+					RepoID:        entry.Repo.ID,
+					WhenCollected: snapshot,
+					Path:          f.Path,
+					StageIndex:    stage.StageIndex,
+					BaseImage:     stage.BaseImage,
+					BaseTag:       stage.BaseTag,
+				})
+			}
 		}
 	}
 
-	return result
+	return dff, dsm
 }
 
 func ConvertCI(entry models.RepoEntry, snapshot time.Time) []BGCIConfig {

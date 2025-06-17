@@ -125,7 +125,7 @@ func insertDockerfiles(
 			continue
 		}
 		for _, f := range fileEntries {
-			features := parser.ParseDockerfile(f.Content)
+			features, _ := parser.ParseDockerfile(f.Content)
 			_, err := queries.InsertOrUpdateDockerfile(ctx, storage.InsertOrUpdateDockerfileParams{
 				RepoID:               repoID,
 				HentetDato:           snapshotDate,
