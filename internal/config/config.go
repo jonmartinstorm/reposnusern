@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strconv"
 )
 
 type StorageType string
@@ -23,11 +24,21 @@ type Config struct {
 	BQDataset     string
 	BQTable       string
 	BQCredentials string // Valgfritt hvis GCP auth skjer automatisk
+	Parallelism   int    // maks antall samtidige repo-prosesser
 }
 
 // NewConfig oppretter en ny konfigurasjon basert på miljøvariabler
 func NewConfig() (Config, error) {
 	storage := StorageType(os.Getenv("REPO_STORAGE"))
+
+	parallelism := 1
+	if pStr := os.Getenv("REPOSNUSERN_PARALL"); pStr != "" {
+		if p, err := strconv.Atoi(pStr); err == nil && p > 0 {
+			parallelism = p
+		} else {
+			return Config{}, errors.New("REPOSNUSERN_PARALL må være et positivt heltall")
+		}
+	}
 
 	cfg := Config{
 		Org:           os.Getenv("ORG"),
@@ -40,6 +51,7 @@ func NewConfig() (Config, error) {
 		BQDataset:     os.Getenv("BQ_DATASET"),
 		BQTable:       os.Getenv("BQ_TABLE"),
 		BQCredentials: os.Getenv("BQ_CREDENTIALS"),
+		Parallelism:   parallelism,
 	}
 
 	if cfg.Org == "" {
