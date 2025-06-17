@@ -78,7 +78,7 @@ var _ = Describe("App.Run", func() {
 		for i := 0; i < 10; i++ {
 			entry := &models.RepoEntry{}
 			fetcher.On("FetchRepoGraphQL", ctx, repos[i]).Return(entry, nil)
-			writer.On("ImportRepo", ctx, *entry, i+1, mock.AnythingOfType("time.Time")).Return(nil)
+			writer.On("ImportRepo", ctx, *entry, mock.AnythingOfType("time.Time")).Return(nil)
 		}
 
 		err := app.Run(ctx)
