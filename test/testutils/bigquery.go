@@ -3,6 +3,7 @@ package testutils
 import (
 	"context"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/stretchr/testify/require"
@@ -18,6 +19,14 @@ type BQTestEnv struct {
 	Container *bqtc.Container
 	Client    *bigquery.Client
 	ProjectID string
+}
+
+func MustParseTime(str string) time.Time {
+	t, err := time.Parse(time.RFC3339, str)
+	if err != nil {
+		panic(err)
+	}
+	return t
 }
 
 func StartTestBigQueryContainer(t *testing.T) *BQTestEnv {
