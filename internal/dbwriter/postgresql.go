@@ -33,7 +33,7 @@ func NewPostgresWriter(postgresdsn string) (*PostgresWriter, error) {
 	}, nil
 }
 
-func (p *PostgresWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, index int, snapshotDate time.Time) error {
+func (p *PostgresWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, snapshotDate time.Time) error {
 	tx, err := p.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("start tx: %w", err)
@@ -67,6 +67,13 @@ func (p *PostgresWriter) ImportRepo(ctx context.Context, entry models.RepoEntry,
 		License:      SafeLicense((*struct{ SpdxID string })(r.License)),
 		OpenIssues:   r.OpenIssues,
 		LanguagesUrl: r.LanguagesURL,
+		ReadmeContent: sql.NullString{
+			String: r.Readme,
+			Valid:  r.Readme != "",
+		},
+		HasSecurityMd: r.Security["has_security_md"],
+		HasDependabot: r.Security["has_dependabot"],
+		HasCodeql:     r.Security["has_codeql"],
 	}
 
 	if err := queries.InsertRepo(ctx, repo); err != nil {

@@ -16,7 +16,7 @@ import (
 const MaxDebugRepos = 10
 
 type DBWriter interface {
-	ImportRepo(ctx context.Context, entry models.RepoEntry, index int, snapshotDate time.Time) error
+	ImportRepo(ctx context.Context, entry models.RepoEntry, snapshotDate time.Time) error
 }
 
 type Fetcher interface {
@@ -78,7 +78,7 @@ func (a *App) Run(ctx context.Context) error {
 			repoIndex++
 			slog.Info("Behandler repo", "nummer", repoIndex, "navn", repo.FullName)
 
-			if err := a.Writer.ImportRepo(ctx, *entry, repoIndex, snapshotDate); err != nil {
+			if err := a.Writer.ImportRepo(ctx, *entry, snapshotDate); err != nil {
 				return fmt.Errorf("import repo: %w", err)
 			}
 

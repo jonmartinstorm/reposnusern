@@ -67,7 +67,7 @@ var _ = Describe("BigQueryWriter simple import", func() {
 		}
 
 		// Dette vil feile på ekte insert, men det vi tester er at mapping og kall ikke panikker
-		err := writer.ImportRepo(ctx, entry, 0, snapshot)
+		err := writer.ImportRepo(ctx, entry, snapshot)
 		Expect(err).To(HaveOccurred()) // fordi insert prøver å kjøre og feiler
 	})
 })

@@ -3,11 +3,13 @@ package bqwriter
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/jonmartinstorm/reposnusern/internal/config"
 	"github.com/jonmartinstorm/reposnusern/internal/models"
+	"github.com/jonmartinstorm/reposnusern/internal/parser"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 )
@@ -19,30 +21,19 @@ type BigQueryWriter struct {
 
 func NewBigQueryWriter(ctx context.Context, cfg *config.Config) (*BigQueryWriter, error) {
 	var client *bigquery.Client
-	var err error
 
-	if cfg.BQCredentials != "" {
-		client, err = bigquery.NewClient(ctx, cfg.BQProjectID, option.WithCredentialsFile(cfg.BQCredentials))
-	} else {
-		client, err = bigquery.NewClient(ctx, cfg.BQProjectID)
-	}
-
+	client, err := bigquery.NewClient(ctx, cfg.BQProjectID, option.WithCredentialsFile(cfg.BQCredentials))
 	if err != nil {
 		return nil, fmt.Errorf("kan ikke opprette BigQuery-klient: %w", err)
 	}
 
-	writer := &BigQueryWriter{
-		Client:  client,
-		Dataset: cfg.BQDataset,
-	}
-
 	// Sørg for at hver tabell finnes
 	tables := map[string]any{
-		"repos":         BGRepoEntry{},
-		"languages":     BGRepoLanguage{},
-		"files":         BGFile{},
-		"ci_config":     BGCIConfig{},
-		"sbom_packages": FlatBGSBOM{},
+		"repos":               BGRepoEntry{},
+		"repo_languages":      BGRepoLanguage{},
+		"dockerfile_features": BGDockerfileFeatures{},
+		"ci_config":           BGCIConfig{},
+		"sbom_packages":       BGSBOMPackages{},
 	}
 
 	for tableName, schemaExample := range tables {
@@ -51,24 +42,27 @@ func NewBigQueryWriter(ctx context.Context, cfg *config.Config) (*BigQueryWriter
 		}
 	}
 
-	return writer, nil
+	return &BigQueryWriter{
+		Client:  client,
+		Dataset: cfg.BQDataset,
+	}, nil
 }
 
-func (w *BigQueryWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, index int, snapshot time.Time) error {
+func (w *BigQueryWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, snapshot time.Time) error {
 	repo := ConvertToBG(entry, snapshot)
 	langs := ConvertLanguages(entry, snapshot)
-	files := ConvertFiles(entry, snapshot)
+	dockerfileFeatures := ConvertDockerfileFeatures(entry, snapshot)
 	ciconfig := ConvertCI(entry, snapshot)
-	sbom := extractBGSBOMFlat(entry, snapshot)
+	sbom := ConvertSBOMPackages(entry, snapshot)
 
 	if err := insert(ctx, w.Client, w.Dataset, "repos", []BGRepoEntry{repo}); err != nil {
 		return fmt.Errorf("repos insert failed: %w", err)
 	}
-	if err := insert(ctx, w.Client, w.Dataset, "languages", langs); err != nil {
-		return fmt.Errorf("languages insert failed: %w", err)
+	if err := insert(ctx, w.Client, w.Dataset, "repo_languages", langs); err != nil {
+		return fmt.Errorf("repo_languages insert failed: %w", err)
 	}
-	if err := insert(ctx, w.Client, w.Dataset, "files", files); err != nil {
-		return fmt.Errorf("files insert failed: %w", err)
+	if err := insert(ctx, w.Client, w.Dataset, "dockerfile_features", dockerfileFeatures); err != nil {
+		return fmt.Errorf("dockerfile_features insert failed: %w", err)
 	}
 	if err := insert(ctx, w.Client, w.Dataset, "ci_config", ciconfig); err != nil {
 		return fmt.Errorf("ci_config insert failed: %w", err)
@@ -91,59 +85,112 @@ func insert[T any](ctx context.Context, client *bigquery.Client, dataset, table 
 // ==== Data-strukturer ====
 
 type BGRepoEntry struct {
-	RepoID       int64     `bigquery:"repo_id"`
-	FullName     string    `bigquery:"full_name"`
-	Topics       []string  `bigquery:"topics"`
-	Stars        int64     `bigquery:"stars"`
-	License      string    `bigquery:"license"`
-	SnapshotDate time.Time `bigquery:"snapshot_date"`
-	UpdatedAt    time.Time `bigquery:"updated_at"`
-	HasSBOM      bool      `bigquery:"has_sbom"`
+	RepoID        int64     `bigquery:"repo_id"`
+	HentetDato    time.Time `bigquery:"hentet_dato"`
+	Name          string    `bigquery:"name"`
+	FullName      string    `bigquery:"full_name"`
+	Description   string    `bigquery:"description"`
+	Stars         int64     `bigquery:"stars"`
+	Forks         int64     `bigquery:"forks"`
+	Archived      bool      `bigquery:"archived"`
+	Private       bool      `bigquery:"private"`
+	IsFork        bool      `bigquery:"is_fork"`
+	Language      string    `bigquery:"language"`
+	SizeMB        float32   `bigquery:"size_mb"`
+	UpdatedAt     time.Time `bigquery:"updated_at"`
+	PushedAt      time.Time `bigquery:"pushed_at"`
+	CreatedAt     time.Time `bigquery:"created_at"`
+	HtmlUrl       string    `bigquery:"html_url"`
+	Topics        string    `bigquery:"topics"`
+	Visibility    string    `bigquery:"visibility"`
+	License       string    `bigquery:"license"`
+	OpenIssues    int64     `bigquery:"open_issues"`
+	LanguagesUrl  string    `bigquery:"languages_url"`
+	ReadmeContent string    `bigquery:"readme_content"`
+	HasSecurityMD bool      `bigquery:"has_security_md"`
+	HasDependabot bool      `bigquery:"has_dependabot"`
+	HasCodeQL     bool      `bigquery:"has_codeql"`
 }
 
 type BGRepoLanguage struct {
-	RepoID       int64     `bigquery:"repo_id"`
-	Language     string    `bigquery:"language"`
-	Bytes        int64     `bigquery:"bytes"`
-	SnapshotDate time.Time `bigquery:"snapshot_date"`
+	RepoID     int64     `bigquery:"repo_id"`
+	HentetDato time.Time `bigquery:"hentet_dato"`
+	Language   string    `bigquery:"language"`
+	Bytes      int64     `bigquery:"bytes"`
 }
 
-type BGFile struct {
-	RepoID       int64     `bigquery:"repo_id"`
-	FileType     string    `bigquery:"file_type"`
-	Path         string    `bigquery:"path"`
-	Content      string    `bigquery:"content"`
-	SnapshotDate time.Time `bigquery:"snapshot_date"`
+type BGDockerfileFeatures struct {
+	DockerfileID         int64     `bigquery:"dockerfile_id"`
+	HentetDato           time.Time `bigquery:"hentet_dato"`
+	RepoID               int64     `bigquery:"repo_id"`
+	FileType             string    `bigquery:"file_type"`
+	Path                 string    `bigquery:"path"`
+	Content              string    `bigquery:"content"`
+	BaseImage            string    `bigquery:"base_image"`
+	BaseTag              string    `bigquery:"base_tag"`
+	UsesLatestTag        bool      `bigquery:"uses_latest_tag"`
+	HasUserInstruction   bool      `bigquery:"has_user_instruction"`
+	HasCopySensitive     bool      `bigquery:"has_copy_sensitive"`
+	HasPackageInstalls   bool      `bigquery:"has_package_installs"`
+	UsesMultistage       bool      `bigquery:"uses_multistage"`
+	HasHealthcheck       bool      `bigquery:"has_healthcheck"`
+	UsesAddInstruction   bool      `bigquery:"uses_add_instruction"`
+	HasLabelMetadata     bool      `bigquery:"has_label_metadata"`
+	HasExpose            bool      `bigquery:"has_expose"`
+	HasEntrypointOrCmd   bool      `bigquery:"has_entrypoint_or_cmd"`
+	InstallsCurlOrWget   bool      `bigquery:"installs_curl_or_wget"`
+	InstallsBuildTools   bool      `bigquery:"installs_build_tools"`
+	HasAptGetClean       bool      `bigquery:"has_apt_get_clean"`
+	WorldWritable        bool      `bigquery:"world_writable"`
+	HasSecretsInEnvOrArg bool      `bigquery:"has_secrets_in_env_or_arg"`
 }
 
 type BGCIConfig struct {
-	RepoID       int64     `bigquery:"repo_id"`
-	Path         string    `bigquery:"path"`
-	Content      string    `bigquery:"content"`
-	SnapshotDate time.Time `bigquery:"snapshot_date"`
+	RepoID     int64     `bigquery:"repo_id"`
+	HentetDato time.Time `bigquery:"hentet_dato"`
+	Path       string    `bigquery:"path"`
+	Content    string    `bigquery:"content"`
 }
 
-type FlatBGSBOM struct {
-	RepoID       int64     `bigquery:"repo_id"`
-	Name         string    `bigquery:"name"`
-	Version      string    `bigquery:"version"`
-	License      string    `bigquery:"license"`
-	PURL         string    `bigquery:"purl"`
-	SnapshotDate time.Time `bigquery:"snapshot_date"`
+type BGSBOMPackages struct {
+	RepoID     int64     `bigquery:"repo_id"`
+	HentetDato time.Time `bigquery:"hentet_dato"`
+	Name       string    `bigquery:"name"`
+	Version    string    `bigquery:"version"`
+	License    string    `bigquery:"license"`
+	PURL       string    `bigquery:"purl"`
 }
 
 // ==== Mapping-funksjoner ====
 
 func ConvertToBG(entry models.RepoEntry, snapshot time.Time) BGRepoEntry {
+	r := entry.Repo
 	return BGRepoEntry{
-		RepoID:       entry.Repo.ID,
-		FullName:     entry.Repo.FullName,
-		Topics:       entry.Repo.Topics,
-		Stars:        entry.Repo.Stars,
-		License:      safeLicense(entry.Repo.License),
-		SnapshotDate: snapshot,
-		UpdatedAt:    parseTime(entry.Repo.UpdatedAt),
-		HasSBOM:      len(entry.SBOM) > 0,
+		RepoID:        r.ID,
+		HentetDato:    snapshot,
+		Name:          r.Name,
+		FullName:      r.FullName,
+		Description:   r.Description,
+		Stars:         r.Stars,
+		Forks:         r.Forks,
+		Archived:      r.Archived,
+		Private:       r.Private,
+		IsFork:        r.IsFork,
+		Language:      r.Language,
+		SizeMB:        float32(r.Size) / 1024.0,
+		UpdatedAt:     parseTime(r.UpdatedAt),
+		PushedAt:      parseTime(r.PushedAt),
+		CreatedAt:     parseTime(r.CreatedAt),
+		HtmlUrl:       r.HtmlUrl,
+		Topics:        strings.Join(r.Topics, ","),
+		Visibility:    r.Visibility,
+		License:       safeLicense(r.License),
+		OpenIssues:    r.OpenIssues,
+		LanguagesUrl:  r.LanguagesURL,
+		ReadmeContent: r.Readme,
+		HasSecurityMD: r.Security["has_security_md"],
+		HasDependabot: r.Security["has_dependabot"],
+		HasCodeQL:     r.Security["has_codeql"],
 	}
 }
 
@@ -151,28 +198,52 @@ func ConvertLanguages(entry models.RepoEntry, snapshot time.Time) []BGRepoLangua
 	var result []BGRepoLanguage
 	for lang, size := range entry.Languages {
 		result = append(result, BGRepoLanguage{
-			RepoID:       entry.Repo.ID,
-			Language:     lang,
-			Bytes:        int64(size),
-			SnapshotDate: snapshot,
+			RepoID:     entry.Repo.ID,
+			HentetDato: snapshot,
+			Language:   lang,
+			Bytes:      int64(size),
 		})
 	}
 	return result
 }
 
-func ConvertFiles(entry models.RepoEntry, snapshot time.Time) []BGFile {
-	var result []BGFile
+func ConvertDockerfileFeatures(entry models.RepoEntry, snapshot time.Time) []BGDockerfileFeatures {
+	var result []BGDockerfileFeatures
+
 	for typ, list := range entry.Files {
+		if !strings.HasPrefix(strings.ToLower(typ), "dockerfile") {
+			continue
+		}
 		for _, f := range list {
-			result = append(result, BGFile{
-				RepoID:       entry.Repo.ID,
-				FileType:     typ,
-				Path:         f.Path,
-				Content:      f.Content,
-				SnapshotDate: snapshot,
+			features := parser.ParseDockerfile(f.Content)
+
+			result = append(result, BGDockerfileFeatures{
+				RepoID:               entry.Repo.ID,
+				HentetDato:           snapshot,
+				FileType:             typ,
+				Path:                 f.Path,
+				Content:              f.Content,
+				BaseImage:            features.BaseImage,
+				BaseTag:              features.BaseTag,
+				UsesLatestTag:        features.UsesLatestTag,
+				HasUserInstruction:   features.HasUserInstruction,
+				HasCopySensitive:     features.HasCopySensitive,
+				HasPackageInstalls:   features.HasPackageInstalls,
+				UsesMultistage:       features.UsesMultistage,
+				HasHealthcheck:       features.HasHealthcheck,
+				UsesAddInstruction:   features.UsesAddInstruction,
+				HasLabelMetadata:     features.HasLabelMetadata,
+				HasExpose:            features.HasExpose,
+				HasEntrypointOrCmd:   features.HasEntrypointOrCmd,
+				InstallsCurlOrWget:   features.InstallsCurlOrWget,
+				InstallsBuildTools:   features.InstallsBuildTools,
+				HasAptGetClean:       features.HasAptGetClean,
+				WorldWritable:        features.WorldWritable,
+				HasSecretsInEnvOrArg: features.HasSecretsInEnvOrArg,
 			})
 		}
 	}
+
 	return result
 }
 
@@ -180,18 +251,19 @@ func ConvertCI(entry models.RepoEntry, snapshot time.Time) []BGCIConfig {
 	var result []BGCIConfig
 	for _, f := range entry.CIConfig {
 		result = append(result, BGCIConfig{
-			RepoID:       entry.Repo.ID,
-			Path:         f.Path,
-			Content:      f.Content,
-			SnapshotDate: snapshot,
+			RepoID:     entry.Repo.ID,
+			HentetDato: snapshot,
+			Path:       f.Path,
+			Content:    f.Content,
 		})
 	}
 	return result
 }
 
-func extractBGSBOMFlat(entry models.RepoEntry, snapshot time.Time) []FlatBGSBOM {
+func ConvertSBOMPackages(entry models.RepoEntry, snapshot time.Time) []BGSBOMPackages {
 	raw := entry.SBOM
-	var result []FlatBGSBOM
+	var result []BGSBOMPackages
+
 	sbomInner, ok := raw["sbom"].(map[string]interface{})
 	if !ok {
 		return result
@@ -206,15 +278,16 @@ func extractBGSBOMFlat(entry models.RepoEntry, snapshot time.Time) []FlatBGSBOM 
 		if !ok {
 			continue
 		}
-		result = append(result, FlatBGSBOM{
-			RepoID:       entry.Repo.ID,
-			Name:         safeString(pkg["name"]),
-			Version:      safeString(pkg["versionInfo"]),
-			License:      safeString(pkg["licenseConcluded"]),
-			PURL:         extractPURL(pkg),
-			SnapshotDate: snapshot,
+		result = append(result, BGSBOMPackages{
+			RepoID:     entry.Repo.ID,
+			HentetDato: snapshot,
+			Name:       safeString(pkg["name"]),
+			Version:    safeString(pkg["versionInfo"]),
+			License:    safeString(pkg["licenseConcluded"]),
+			PURL:       extractPURL(pkg),
 		})
 	}
+
 	return result
 }
 

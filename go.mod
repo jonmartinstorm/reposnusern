@@ -9,7 +9,6 @@ require (
 	github.com/onsi/gomega v1.37.0
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.37.0
-	github.com/testcontainers/testcontainers-go/modules/gcloud v0.37.0
 	google.golang.org/api v0.232.0
 )
 

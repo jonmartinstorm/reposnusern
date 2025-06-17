@@ -44,9 +44,9 @@ func NewRealPostgresWriter(db *sql.DB) *RealPostgresWriter {
 	return &RealPostgresWriter{db: db}
 }
 
-func (r *RealPostgresWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, index int, snapshot time.Time) error {
+func (r *RealPostgresWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, snapshot time.Time) error {
 	pw := &dbwriter.PostgresWriter{DB: r.db}
-	return pw.ImportRepo(ctx, entry, index, snapshot)
+	return pw.ImportRepo(ctx, entry, snapshot)
 }
 
 func StartTestPostgresContainer() *TestDB {
