@@ -41,9 +41,8 @@ func NewApp(cfg config.Config, writer DBWriter, fetcher Fetcher) *App {
 }
 
 func (a *App) Run(ctx context.Context) error {
-	start := time.Now()
-	snapshotDate := time.Now().Truncate(24 * time.Hour)
-	slog.Info("Starter snapshot", "dato", snapshotDate.Format("2006-01-02"))
+	snapshotTime := time.Now()
+	slog.Info("Starter snapshot", "dato", snapshotTime.Format("2006-01-02"))
 
 	page := 1
 	repoIndex := 0
@@ -78,7 +77,7 @@ func (a *App) Run(ctx context.Context) error {
 			repoIndex++
 			slog.Info("Behandler repo", "nummer", repoIndex, "navn", repo.FullName)
 
-			if err := a.Writer.ImportRepo(ctx, *entry, snapshotDate); err != nil {
+			if err := a.Writer.ImportRepo(ctx, *entry, snapshotTime); err != nil {
 				return fmt.Errorf("import repo: %w", err)
 			}
 
@@ -91,7 +90,7 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	logMemoryStats()
-	slog.Info("Ferdig med alle repos!", "varighet", time.Since(start).String())
+	slog.Info("Ferdig med alle repos!", "varighet", time.Since(snapshotTime).String())
 
 	return nil
 }

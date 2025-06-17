@@ -33,11 +33,13 @@ func NewPostgresWriter(postgresdsn string) (*PostgresWriter, error) {
 	}, nil
 }
 
-func (p *PostgresWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, snapshotDate time.Time) error {
+func (p *PostgresWriter) ImportRepo(ctx context.Context, entry models.RepoEntry, snapshotTime time.Time) error {
 	tx, err := p.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("start tx: %w", err)
 	}
+
+	snapshotDate := snapshotTime.Truncate(24 * time.Hour)
 
 	queries := storage.New(tx)
 

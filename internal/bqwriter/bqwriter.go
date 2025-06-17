@@ -86,7 +86,7 @@ func insert[T any](ctx context.Context, client *bigquery.Client, dataset, table 
 
 type BGRepoEntry struct {
 	RepoID        int64     `bigquery:"repo_id"`
-	HentetDato    time.Time `bigquery:"hentet_dato"`
+	WhenCollected time.Time `bigquery:"when_collected"`
 	Name          string    `bigquery:"name"`
 	FullName      string    `bigquery:"full_name"`
 	Description   string    `bigquery:"description"`
@@ -113,16 +113,15 @@ type BGRepoEntry struct {
 }
 
 type BGRepoLanguage struct {
-	RepoID     int64     `bigquery:"repo_id"`
-	HentetDato time.Time `bigquery:"hentet_dato"`
-	Language   string    `bigquery:"language"`
-	Bytes      int64     `bigquery:"bytes"`
+	RepoID        int64     `bigquery:"repo_id"`
+	WhenCollected time.Time `bigquery:"when_collected"`
+	Language      string    `bigquery:"language"`
+	Bytes         int64     `bigquery:"bytes"`
 }
 
 type BGDockerfileFeatures struct {
-	DockerfileID         int64     `bigquery:"dockerfile_id"`
-	HentetDato           time.Time `bigquery:"hentet_dato"`
 	RepoID               int64     `bigquery:"repo_id"`
+	WhenCollected        time.Time `bigquery:"when_collected"`
 	FileType             string    `bigquery:"file_type"`
 	Path                 string    `bigquery:"path"`
 	Content              string    `bigquery:"content"`
@@ -146,19 +145,19 @@ type BGDockerfileFeatures struct {
 }
 
 type BGCIConfig struct {
-	RepoID     int64     `bigquery:"repo_id"`
-	HentetDato time.Time `bigquery:"hentet_dato"`
-	Path       string    `bigquery:"path"`
-	Content    string    `bigquery:"content"`
+	RepoID        int64     `bigquery:"repo_id"`
+	WhenCollected time.Time `bigquery:"when_collected"`
+	Path          string    `bigquery:"path"`
+	Content       string    `bigquery:"content"`
 }
 
 type BGSBOMPackages struct {
-	RepoID     int64     `bigquery:"repo_id"`
-	HentetDato time.Time `bigquery:"hentet_dato"`
-	Name       string    `bigquery:"name"`
-	Version    string    `bigquery:"version"`
-	License    string    `bigquery:"license"`
-	PURL       string    `bigquery:"purl"`
+	RepoID        int64     `bigquery:"repo_id"`
+	WhenCollected time.Time `bigquery:"when_collected"`
+	Name          string    `bigquery:"name"`
+	Version       string    `bigquery:"version"`
+	License       string    `bigquery:"license"`
+	PURL          string    `bigquery:"purl"`
 }
 
 // ==== Mapping-funksjoner ====
@@ -167,7 +166,7 @@ func ConvertToBG(entry models.RepoEntry, snapshot time.Time) BGRepoEntry {
 	r := entry.Repo
 	return BGRepoEntry{
 		RepoID:        r.ID,
-		HentetDato:    snapshot,
+		WhenCollected: snapshot,
 		Name:          r.Name,
 		FullName:      r.FullName,
 		Description:   r.Description,
@@ -198,10 +197,10 @@ func ConvertLanguages(entry models.RepoEntry, snapshot time.Time) []BGRepoLangua
 	var result []BGRepoLanguage
 	for lang, size := range entry.Languages {
 		result = append(result, BGRepoLanguage{
-			RepoID:     entry.Repo.ID,
-			HentetDato: snapshot,
-			Language:   lang,
-			Bytes:      int64(size),
+			RepoID:        entry.Repo.ID,
+			WhenCollected: snapshot,
+			Language:      lang,
+			Bytes:         int64(size),
 		})
 	}
 	return result
@@ -219,7 +218,7 @@ func ConvertDockerfileFeatures(entry models.RepoEntry, snapshot time.Time) []BGD
 
 			result = append(result, BGDockerfileFeatures{
 				RepoID:               entry.Repo.ID,
-				HentetDato:           snapshot,
+				WhenCollected:        snapshot,
 				FileType:             typ,
 				Path:                 f.Path,
 				Content:              f.Content,
@@ -251,10 +250,10 @@ func ConvertCI(entry models.RepoEntry, snapshot time.Time) []BGCIConfig {
 	var result []BGCIConfig
 	for _, f := range entry.CIConfig {
 		result = append(result, BGCIConfig{
-			RepoID:     entry.Repo.ID,
-			HentetDato: snapshot,
-			Path:       f.Path,
-			Content:    f.Content,
+			RepoID:        entry.Repo.ID,
+			WhenCollected: snapshot,
+			Path:          f.Path,
+			Content:       f.Content,
 		})
 	}
 	return result
@@ -279,12 +278,12 @@ func ConvertSBOMPackages(entry models.RepoEntry, snapshot time.Time) []BGSBOMPac
 			continue
 		}
 		result = append(result, BGSBOMPackages{
-			RepoID:     entry.Repo.ID,
-			HentetDato: snapshot,
-			Name:       safeString(pkg["name"]),
-			Version:    safeString(pkg["versionInfo"]),
-			License:    safeString(pkg["licenseConcluded"]),
-			PURL:       extractPURL(pkg),
+			RepoID:        entry.Repo.ID,
+			WhenCollected: snapshot,
+			Name:          safeString(pkg["name"]),
+			Version:       safeString(pkg["versionInfo"]),
+			License:       safeString(pkg["licenseConcluded"]),
+			PURL:          extractPURL(pkg),
 		})
 	}
 
