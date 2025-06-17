@@ -2,7 +2,6 @@ package test
 
 import (
 	"context"
-	"testing"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/jonmartinstorm/reposnusern/internal/bqwriter"
@@ -20,11 +19,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
-
-func TestAppBigQueryIntegration(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "App-integrasjon BigQuery")
-}
 
 var _ = Describe("runner.App BigQuery", Ordered, func() {
 	var (
